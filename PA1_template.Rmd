@@ -1,0 +1,98 @@
+
+
+---
+title: "PA1 Analysis"
+author: "Your Name"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+
+# 下载并解压数据（只执行一次）
+if (!file.exists("activity.csv")) {
+  zip_url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+  download.file(zip_url, destfile = "activity.zip", mode = "wb")
+  unzip("activity.zip")
+}
+```
+
+## 1. Loading and preprocessing the data
+
+```{r load-data}
+activity <- read.csv("activity.csv")
+activity$date <- as.Date(activity$date)
+```
+
+## 2. What is mean total number of steps taken per day?
+
+```{r total-steps-per-day}
+total_steps <- activity %>%
+  group_by(date) %>%
+  summarise(total = sum(steps, na.rm = TRUE))
+
+hist(total_steps$total, main = "Total Steps Per Day", xlab = "Steps", breaks = 20)
+
+mean_steps <- mean(total_steps$total, na.rm = TRUE)
+median_steps <- median(total_steps$total, na.rm = TRUE)
+
+mean_steps
+median_steps
+```
+
+## 3. What is the average daily activity pattern?
+
+```{r average-interval}
+avg_interval <- activity %>%
+  group_by(interval) %>%
+  summarise(avg_steps = mean(steps, na.rm = TRUE))
+
+plot(avg_interval$interval, avg_interval$avg_steps, type = "l",
+     main = "Average Steps per Interval", xlab = "Interval", ylab = "Average Steps")
+
+avg_interval[which.max(avg_interval$avg_steps), ]
+```
+
+## 4. Imputing missing values
+
+```{r impute}
+# Count NAs
+sum(is.na(activity$steps))
+
+# Use mean for that interval to replace NAs
+activity_filled <- activity
+activity_filled$steps[is.na(activity_filled$steps)] <- avg_interval$avg_steps[
+  match(activity_filled$interval[is.na(activity_filled$steps)], avg_interval$interval)
+]
+
+# Histogram after imputation
+filled_total <- activity_filled %>%
+  group_by(date) %>%
+  summarise(total = sum(steps))
+
+hist(filled_total$total, main = "Total Steps Per Day (Imputed)", xlab = "Steps", breaks = 20)
+
+mean(filled_total$total)
+median(filled_total$total)
+```
+
+## 5. Are there differences in activity patterns between weekdays and weekends?
+
+```{r weekday-weekend}
+activity_filled$day_type <- ifelse(weekdays(activity_filled$date) %in% c("Saturday", "Sunday"),
+                                   "weekend", "weekday")
+activity_filled$day_type <- as.factor(activity_filled$day_type)
+
+day_avg <- activity_filled %>%
+  group_by(interval, day_type) %>%
+  summarise(avg_steps = mean(steps))
+
+library(lattice)
+xyplot(avg_steps ~ interval | day_type, data = day_avg, type = "l",
+       layout = c(1,2), main = "Weekday vs Weekend Activity Patterns")
+```
